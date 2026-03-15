@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(uuid())
+  full_name      String
+  email          String   @unique
+  password_hash  String
+  email_verified Boolean  @default(false)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  refreshTokens  RefreshToken[]
+  passkeys       Passkey[]
+
+  @@index([email])
+}
+
+model Passkey {
+  id               String   @id @default(uuid())
+  credentialID     Bytes    @unique
+  credentialPublicKey Bytes
+  counter          Int      @default(0)
+  credentialDeviceType String
+  credentialBackedUp   Boolean @default(false)
+  transports       String?  // Stored as comma separated string or JSON
+  
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revoked   Boolean  @default(false)
+
+  @@index([userId])
+  @@index([token])
+}
