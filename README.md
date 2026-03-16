@@ -2,52 +2,51 @@
 
 Welcome to **Voyonata**, the world's smartest and securely mathematical AI travel planner. Built to curate personalized itineraries, discover hidden gems, and book travel seamlessly—all secured by military-grade, zero-knowledge encryption.
 
-> **Note:** The Login & Registration Page was developed by **R Aswin**.
+> **Note:** The Login & Registration Page was originally developed by **R Aswin**. The platform has since been expanded to a full-stack application with a complete dashboard, trip planning system, and user management.
+
+---
+
+## 🗺️ Core Features
+
+### 1. Trip Planner & Itinerary Generator
+- **Multi-step Planning:** Users can plan trips by specifying destination, exact dates, travel party size, budget (Budget/Moderate/Luxury), and specific interests (Culture, Food, Adventure, Nightlife, etc.).
+- **Smart Itineraries:** Automatically generates a structured, day-by-day timeline with categorized activities, estimated times, and descriptions tailored to selected preferences.
+- **Trip Management:** A dedicated "My Trips" dashboard to view all upcoming/past trips, including total trip counts, durations, and quick-delete functionality.
+
+### 2. User Dashboard & Experience
+- **Glassmorphic UI:** A stunning, modern interface utilizing deep blurs, animated backgrounds, and responsive sidebars powered by Tailwind CSS and Framer Motion.
+- **Dark/Light Mode:** Full system-aware theme toggling with localized `localStorage` persistence to prevent hydration flashing.
+- **Profile & Settings:** Secure portals for users to update their personal information, manage security settings, and even execute cascade account deletions.
 
 ---
 
 ## 🔐 The Authentication Fortress
 
-Even without external Cloud firewalls, the application code itself is built like a fortress. The Login & Registration pages are utilizing some of the most mathematically secure features possible in modern software engineering.
+Even without external Cloud firewalls, the application code itself is built like a fortress. The security layer utilizes some of the most mathematically secure features possible in modern software engineering.
 
 ### 1. Password Pre-Hashing (Eliminates In-Transit Theft)
-*   **The Feature:** When a user types their password, it never leaves their computer in plaintext.
-*   **How it works:** The instant they click "Sign In," the frontend uses the browser's built-in `WebCrypto API` to turn their password into a cryptographic SHA-256 hash. 
-*   **Security Benefit:** Even if a hacker managed to intercept the Wi-Fi connection, they would only steal the *hash*, not the password itself. The server never receives the real password, meaning it can't accidentally log or leak it.
+When a user types their password, it never leaves their computer in plaintext. The frontend uses the browser's built-in `WebCrypto API` to turn their password into a cryptographic SHA-256 hash before transmission.
 
 ### 2. Argon2id Server Hashing (Eliminates Database Breaches)
-*   **The Feature:** Once the pre-hashed password arrives at the server, it is hashed *again* before being saved to PostgreSQL.
-*   **How it works:** It uses `Argon2id`—the winner of the international Password Hashing Competition. It is specifically designed to be highly resistant to brute-force attacks by graphics cards (GPUs).
-*   **Security Benefit:** If a hacker were to somehow download your entire PostgreSQL database, they still wouldn't have the passwords. Because of Argon2id, it would take them thousands of years to mathematically guess even a single user's password from the hashes.
+Once the pre-hashed password arrives at the server, it is hashed *again* using `Argon2id`—the winner of the international Password Hashing Competition, designed to be highly resistant to GPU brute-force attacks.
 
 ### 3. Passwordless FIDO2 Passkeys (Eliminates Phishing)
-*   **The Feature:** Users can log in using their physical device's built-in biometrics (like Apple TouchID, Windows Hello Face Recognition, or a YubiKey).
-*   **How it works:** This uses Public Key Cryptography. During registration, the user's phone/laptop generates a mathematical pair of keys. The "Private Key" is locked inside the phone's secure hardware chip and can never be extracted. Only the "Public Key" is sent to your database.
-*   **Security Benefit:** Because the user never types a password, they can't be tricked into giving it away to a fake phishing website. Even if your database was completely hacked and all the Public Keys were stolen, the attackers still couldn't log in—they need the physical phone/laptop.
+Users can log in using their physical device's built-in biometrics (Apple TouchID, Windows Hello, YubiKey). This uses Public Key Cryptography—the private key never leaves the device's secure hardware enclave.
 
 ### 4. Device-Bound JSON Web Tokens (Eliminates Session Hijacking)
-*   **The Feature:** When a user logs in, they are given a digital "ticket" (JWT) to keep them logged in. Your tickets are tied specifically to their computer.
-*   **How it works:** When the JWT is created, the backend takes their IP address and their specific browser type (`User-Agent`) and creates a cryptographic fingerprint of it. This fingerprint is embedded directly into the token's digital signature.
-*   **Security Benefit:** A common attack is stealing a user's session cookie to log in as them without needing their password. In Voyonata, if a hacker steals a token and tries to use it from a different location, the server will instantly reject the token because the hacker's IP address won't match the cryptographic fingerprint embedded in the stolen token.
+JWTs are verified via Next.js 16 Middleware (Proxy) to protect all `/dashboard` routes. The tokens are HTTP-only and cryptographically secure.
 
 ### 5. Distributed Redis Rate Limiting (Eliminates Brute Forcing)
-*   **The Feature:** A centralized memory system that tracks every single login attempt.
-*   **How it works:** If someone tries to guess passwords rapidly, the Redis cache counts the attempts against that specific IP address.
-*   **Security Benefit:** Once the threshold is hit (e.g., 5 failed attempts in a row), the API completely blocks that IP address from trying again, stopping automated credential-stuffing botnets dead in their tracks.
-
-### 6. Visual Password Strength Meter (Improves UX & Security)
-*   **The Feature:** An animated, real-time UI component on the Registration page.
-*   **How it works:** As the user types their new password, the meter changes colors based on the complexity and entropy of their string.
-*   **Security Benefit:** It trains the user to organically choose robust master passwords without frustrating them with annoying popup rules.
+A centralized memory system (or local memory fallback during build/dev) tracks every single login attempt, stopping automated credential-stuffing botnets dead in their tracks.
 
 ---
 
 ## 🛠 Tech Stack
-- **Framework**: Next.js 14+ (App Router)
-- **Styling**: Tailwind CSS & Framer Motion (Glassmorphism & animated dark-mode UI)
-- **Database**: PostgreSQL (managed via Prisma ORM)
-- **Cache**: Redis
-- **Authentication**: JWT, WebAuthn, Argon2
+- **Framework**: Next.js 16.1 (App Router, Turbopack)
+- **Styling**: Tailwind CSS v4 & Framer Motion (Glassmorphism & animated dark-mode UI)
+- **Database**: PostgreSQL (managed via Prisma ORM 5.21)
+- **Cache**: Redis (via ioredis)
+- **Authentication**: JWT (jose), WebAuthn (SimpleWebAuthn), Argon2
 
 ## 📦 Getting Started Locally
 
@@ -59,9 +58,16 @@ npm install
 2. **Environment Variables**:
 Create a `.env` file at the root:
 ```env
+# Database connection
 DATABASE_URL="postgresql://user:password@localhost:5432/voyonata"
-REDIS_URL="redis://localhost:6379"
+
+# Redis URL for rate limiting (comment out to use in-memory fallback)
+# REDIS_URL="redis://localhost:6379"
+
+# JWT Secret Key for securely signing tokens
 JWT_SECRET="your_highly_secure_random_string_here"
+
+# Public URL for WebAuthn rpID and origin configuration
 NEXT_PUBLIC_URL="http://localhost:3000"
 ```
 
