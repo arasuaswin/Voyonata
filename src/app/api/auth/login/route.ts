@@ -2,10 +2,7 @@ import { NextResponse } from 'next/server';
 import * as argon2 from 'argon2';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
-import { signToken } from '@/lib/auth';
-import { cookies } from 'next/headers';
-import crypto from 'crypto';
-
+import { createSession } from '@/lib/session';
 import redis from '@/lib/redis';
 
 const loginSchema = z.object({
@@ -64,49 +61,13 @@ export async function POST(request: Request) {
     // Remove successful logins from rate limit cache
     await redis.del(`ratelimit:login:${ip}`);
 
-    // Generate Device Fingerprint (Zero-Knowledge JWT Binding)
+    // Create session using shared utility (JWT + refresh token + cookies)
     const userAgent = request.headers.get('user-agent') || 'unknown-device';
-    const fingerprintRaw = `${ip}|${userAgent}`;
-    const deviceFingerprint = crypto.createHash('sha256').update(fingerprintRaw).digest('hex');
-
-    // Generate JWT (15-min access token bound to the device fingerprint)
-    const accessToken = await signToken({ userId: user.id, email: user.email }, deviceFingerprint);
-
-    // Generate Refresh Token
-    const refreshTokenString = crypto.randomBytes(64).toString('hex');
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-
-    // Revoke old refresh tokens for this user (Optional: limits to 1 active session)
-    await prisma.refreshToken.updateMany({
-      where: { userId: user.id, revoked: false },
-      data: { revoked: true },
-    });
-
-    // Store new Refresh Token
-    await prisma.refreshToken.create({
-      data: {
-        token: refreshTokenString,
-        userId: user.id,
-        expiresAt,
-      },
-    });
-
-    const cookieStore = await cookies();
-    cookieStore.set('jwt-token', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 15 * 60, // 15 min
-      path: '/',
-    });
-    
-    cookieStore.set('refresh-token', refreshTokenString, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60, // 7 days
-      path: '/',
+    await createSession({
+      userId: user.id,
+      email: user.email,
+      ip,
+      userAgent,
     });
 
     return NextResponse.json(

@@ -2,16 +2,15 @@ import { NextResponse } from 'next/server';
 import { generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
-import { signToken } from '@/lib/auth';
-import crypto from 'crypto';
+import { createSession } from '@/lib/session';
 
 const rpID = process.env.NEXT_PUBLIC_URL ? new URL(process.env.NEXT_PUBLIC_URL).hostname : 'localhost';
 const origin = process.env.NEXT_PUBLIC_URL || `http://${rpID}:3000`;
 
 export async function GET(request: Request) {
   try {
-    // Note: To login with a passkey, we don't necessarily need to know who the user is yet.
-    // The browser will prompt them to select an available passkey, which tells us who they are.
+    // To login with a passkey, we don't need to know who the user is yet.
+    // The browser will prompt them to select an available passkey.
     const options = await generateAuthenticationOptions({
       rpID,
       userVerification: 'preferred',
@@ -44,18 +43,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Challenge expired' }, { status: 400 });
     }
 
-    // Look up the credential in our database to find the user
-    // The browser sends credential.id as a base64url string. We need to match it to our stored Buffer.
-    const credentialBase64 = body.id;
-    // Buffer conversion requires exact matching; in production you must carefully match encoding types.
-    // Assuming simplewebauthn handles the matching if we can fetch all keys for a user, 
-    // but without a user ID, we have to find the key directly.
+    // Convert the base64url credential ID from the browser into a Buffer for DB lookup
+    const credentialIDBuffer = Buffer.from(body.id, 'base64url');
+
+    // Look up the specific credential in our database
     const passkey = await prisma.passkey.findFirst({
-      include: { user: true } // We need the user to log them in!
+      where: { credentialID: credentialIDBuffer },
+      include: { user: true },
     });
 
-    // Note: For a true 1:1 lookup, you need to properly handle Base64URL to Buffer conversion for `credentialID`.
-    // We are simulating a generic match above for complex architectures.
     if (!passkey) {
       return NextResponse.json({ message: 'Credential not found' }, { status: 404 });
     }
@@ -82,37 +78,14 @@ export async function POST(request: Request) {
 
       // User successfully proved possession of their hardware key! Log them in!
       const user = passkey.user;
-
-      // Duplicate Login logic follows from /api/auth/login...
       const ip = request.headers.get('x-forwarded-for') || 'unknown-ip';
       const userAgent = request.headers.get('user-agent') || 'unknown-device';
-      const fingerprintRaw = `${ip}|${userAgent}`;
-      const deviceFingerprint = crypto.createHash('sha256').update(fingerprintRaw).digest('hex');
 
-      const accessToken = await signToken({ userId: user.id, email: user.email }, deviceFingerprint);
-      const refreshTokenString = crypto.randomBytes(64).toString('hex');
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
-
-      await prisma.refreshToken.create({
-        data: {
-          token: refreshTokenString,
-          userId: user.id,
-          expiresAt,
-        },
-      });
-
-      cookieStore.set('jwt-token', accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 15 * 60, path: '/',
-      });
-      cookieStore.set('refresh-token', refreshTokenString, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60, path: '/',
+      await createSession({
+        userId: user.id,
+        email: user.email,
+        ip,
+        userAgent,
       });
 
       cookieStore.set('webauthn-challenge', '', { maxAge: 0 }); // Clear challenge
@@ -125,3 +98,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 }
+

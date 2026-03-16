@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Mail, Shield, ArrowRight } from 'lucide-react';
+import { Mail, Shield, ArrowRight, Fingerprint } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { clientSideHash } from '@/lib/clientCrypto';
+import { startAuthentication } from '@simplewebauthn/browser';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ import { AnimatedBackground } from '@/components/ui/animated-background';
 export default function LoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [isPasskeyLoading, setIsPasskeyLoading] = useState(false);
   const [error, setError] = useState('');
   
   const [formData, setFormData] = useState({
@@ -48,11 +50,46 @@ export default function LoginPage() {
         throw new Error(data.message || 'Invalid credentials');
       }
 
-      router.push('/dashboard'); // or wherever after login
+      router.push('/dashboard');
     } catch (err: any) {
       setError(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handlePasskeyLogin = async () => {
+    setError('');
+    setIsPasskeyLoading(true);
+
+    try {
+      // Step 1: Get authentication options from server
+      const optionsRes = await fetch('/api/webauthn/authenticate');
+      if (!optionsRes.ok) throw new Error('Failed to get authentication options');
+      const options = await optionsRes.json();
+
+      // Step 2: Prompt user to use their passkey
+      const credential = await startAuthentication({ optionsJSON: options });
+
+      // Step 3: Verify with server
+      const verifyRes = await fetch('/api/webauthn/authenticate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credential),
+      });
+
+      const data = await verifyRes.json();
+      if (!verifyRes.ok) throw new Error(data.message || 'Passkey authentication failed');
+
+      router.push('/dashboard');
+    } catch (err: any) {
+      if (err.name === 'NotAllowedError') {
+        setError('Passkey authentication was cancelled.');
+      } else {
+        setError(err.message || 'Passkey authentication failed');
+      }
+    } finally {
+      setIsPasskeyLoading(false);
     }
   };
 
@@ -147,6 +184,28 @@ export default function LoginPage() {
               </Button>
             </form>
 
+            {/* Divider */}
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-white/10"></div>
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card/70 px-2 text-muted-foreground">or</span>
+              </div>
+            </div>
+
+            {/* Passkey Login */}
+            <Button
+              variant="outline"
+              className="w-full border-white/10 bg-white/5 hover:bg-white/10"
+              onClick={handlePasskeyLogin}
+              isLoading={isPasskeyLoading}
+              type="button"
+            >
+              <Fingerprint className="mr-2 h-4 w-4" />
+              Sign in with Passkey
+            </Button>
+
             <div className="mt-6 text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{" "}
               <Link href="/register" className="font-medium text-foreground hover:text-primary transition-colors underline-offset-4 hover:underline">
@@ -159,3 +218,4 @@ export default function LoginPage() {
     </main>
   );
 }
+

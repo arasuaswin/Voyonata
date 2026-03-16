@@ -2,20 +2,15 @@ import { NextResponse } from 'next/server';
 import * as argon2 from 'argon2';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
-import { signToken } from '@/lib/auth';
-import { cookies } from 'next/headers';
-import crypto from 'crypto';
+import { createSession } from '@/lib/session';
 
+// Password arrives as a SHA-256 hex hash from client-side pre-hashing
 const registerSchema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Invalid email address'),
   password: z
     .string()
-    .min(8, 'Password must be at least 8 characters')
-    .refine((val) => /[A-Z]/.test(val), { message: 'Password must contain at least one uppercase letter' })
-    .refine((val) => /[a-z]/.test(val), { message: 'Password must contain at least one lowercase letter' })
-    .refine((val) => /[0-9]/.test(val), { message: 'Password must contain at least one number' })
-    .refine((val) => /[^A-Za-z0-9]/.test(val), { message: 'Password must contain at least one special character' }),
+    .regex(/^[a-f0-9]{64}$/, 'Invalid password hash format'),
 });
 
 export async function POST(request: Request) {
@@ -55,40 +50,10 @@ export async function POST(request: Request) {
       },
     });
 
-    // Generate JWT (15-min access token)
-    const accessToken = await signToken({ userId: user.id, email: user.email });
-
-    // Generate Refresh Token (Cryptographically secure random string)
-    const refreshTokenString = crypto.randomBytes(64).toString('hex');
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // Refresh token valid for 7 days
-
-    // Store Refresh Token in DB
-    await prisma.refreshToken.create({
-      data: {
-        token: refreshTokenString,
-        userId: user.id,
-        expiresAt,
-      },
-    });
-
-    // Set Secure Cookies
-    const cookieStore = await cookies();
-    // Access Token Cookie (15 min)
-    cookieStore.set('jwt-token', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 15 * 60, // 15 minutes
-      path: '/',
-    });
-    // Refresh Token Cookie (7 days)
-    cookieStore.set('refresh-token', refreshTokenString, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60, // 7 days
-      path: '/',
+    // Create session (JWT + refresh token + cookies) using shared utility
+    await createSession({
+      userId: user.id,
+      email: user.email,
     });
 
     return NextResponse.json(

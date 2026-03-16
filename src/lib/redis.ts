@@ -2,12 +2,31 @@ import Redis from 'ioredis';
 
 // Singleton pattern for the Redis client to prevent overwhelming the connection pool
 const getRedisClient = () => {
-  if (process.env.REDIS_URL) {
-    console.log('Connecting to Redis...');
-    return new Redis(process.env.REDIS_URL);
+  // During build time, always use memory fallback
+  if (process.env.REDIS_URL && typeof window === 'undefined') {
+    try {
+      console.log('Connecting to Redis...');
+      const client = new Redis(process.env.REDIS_URL, {
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+        retryStrategy: (times: number) => {
+          if (times > 3) return null; // Stop retrying after 3 attempts
+          return Math.min(times * 200, 2000);
+        },
+      });
+      
+      // Suppress unhandled error events (e.g. during build)
+      client.on('error', (err: Error) => {
+        console.warn('Redis connection error (falling back to memory):', err.message);
+      });
+
+      return client;
+    } catch {
+      // Fall through to memory fallback
+    }
   }
   
-  console.warn('REDIS_URL is not set. Using local memory fallback. This is NOT suitable for Multi-Instance Production.');
+  console.warn('Using local memory fallback for rate limiting. This is NOT suitable for Multi-Instance Production.');
   // If no Redis URL is provided (e.g. local dev without docker), we return a mocked Redis interface 
   // so the application doesn't crash, but rate limiting works in memory.
   const memStore = new Map<string, string>();
@@ -48,3 +67,4 @@ export default redis;
 declare global {
   var redisClient: any;
 }
+
