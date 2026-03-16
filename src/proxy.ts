@@ -28,10 +28,10 @@ function isPublicRoute(pathname: string): boolean {
   return publicPaths.some(path => pathname === path);
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip middleware for public routes
+  // Skip for public routes
   if (isPublicRoute(pathname)) {
     // If user is logged in and tries to access login/register, redirect to dashboard
     if (pathname === '/login' || pathname === '/register') {
