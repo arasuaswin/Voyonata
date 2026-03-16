@@ -13,34 +13,41 @@ interface UserData {
 
 export default function DashboardPage() {
   const [user, setUser] = useState<UserData | null>(null);
+  const [tripsCount, setTripsCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchUser() {
+    async function fetchData() {
       try {
-        const res = await fetch('/api/user/profile');
-        if (res.ok) {
-          const data = await res.json();
+        const [userRes, tripsRes] = await Promise.all([
+          fetch('/api/user/profile'),
+          fetch('/api/trips')
+        ]);
+        
+        if (userRes.ok) {
+          const data = await userRes.json();
           setUser(data.user);
         }
+        if (tripsRes.ok) {
+          const data = await tripsRes.json();
+          setTripsCount(data.trips.length);
+        }
       } catch (error) {
-        console.error('Failed to fetch user:', error);
+        console.error('Failed to fetch dashboard data:', error);
       } finally {
         setLoading(false);
       }
     }
-    fetchUser();
+    fetchData();
   }, []);
 
   const quickActions = [
     {
       icon: Map,
       title: 'Plan a Trip',
-      description: 'Let AI craft your perfect itinerary',
-      href: '#',
+      description: 'Generate your perfect itinerary',
+      href: '/dashboard/trips/plan',
       color: 'from-indigo-500/20 to-purple-500/20',
-      disabled: true,
-      badge: 'Coming Soon',
     },
     {
       icon: User,
@@ -103,18 +110,18 @@ export default function DashboardPage() {
         className="grid grid-cols-1 sm:grid-cols-3 gap-4"
       >
         <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-xl p-5 shadow-xl">
-          <div className="flex items-center gap-3">
+          <Link href="/dashboard/trips" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center">
               <Calendar className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <p className="text-2xl font-bold">0</p>
+              <p className="text-2xl font-bold">{tripsCount}</p>
               <p className="text-xs text-muted-foreground">Trips Planned</p>
             </div>
-          </div>
+          </Link>
         </div>
         <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-xl p-5 shadow-xl">
-          <div className="flex items-center gap-3">
+          <Link href="/dashboard/settings" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <div className="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
               <Shield className="h-5 w-5 text-emerald-500" />
             </div>
@@ -122,10 +129,10 @@ export default function DashboardPage() {
               <p className="text-2xl font-bold text-emerald-500">Active</p>
               <p className="text-xs text-muted-foreground">Security Status</p>
             </div>
-          </div>
+          </Link>
         </div>
         <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-xl p-5 shadow-xl">
-          <div className="flex items-center gap-3">
+          <Link href="/dashboard/settings" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <div className="h-10 w-10 rounded-lg bg-accent/20 flex items-center justify-center">
               <Key className="h-5 w-5 text-accent" />
             </div>
@@ -133,7 +140,7 @@ export default function DashboardPage() {
               <p className="text-2xl font-bold">—</p>
               <p className="text-xs text-muted-foreground">Passkeys Registered</p>
             </div>
-          </div>
+          </Link>
         </div>
       </motion.div>
 
@@ -146,13 +153,11 @@ export default function DashboardPage() {
       >
         <h2 className="text-lg font-semibold">Quick Actions</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {quickActions.map(({ icon: Icon, title, description, href, color, disabled, badge }) => (
+          {quickActions.map(({ icon: Icon, title, description, href, color }) => (
             <Link
               key={title}
-              href={disabled ? '#' : href}
-              className={`group relative bg-card/70 backdrop-blur-xl border border-white/10 rounded-xl p-5 shadow-xl transition-all ${
-                disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/10 hover:border-white/20 hover:shadow-2xl'
-              }`}
+              href={href}
+              className={`group relative bg-card/70 backdrop-blur-xl border border-white/10 rounded-xl p-5 shadow-xl transition-all hover:bg-white/10 hover:border-white/20 hover:shadow-2xl`}
             >
               <div className={`absolute inset-0 rounded-xl bg-gradient-to-br ${color} opacity-0 group-hover:opacity-100 transition-opacity`} />
               <div className="relative flex items-start gap-4">
@@ -162,11 +167,6 @@ export default function DashboardPage() {
                 <div>
                   <h3 className="font-semibold text-sm flex items-center gap-2">
                     {title}
-                    {badge && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium">
-                        {badge}
-                      </span>
-                    )}
                   </h3>
                   <p className="text-xs text-muted-foreground mt-1">{description}</p>
                 </div>

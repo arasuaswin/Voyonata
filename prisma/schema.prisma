@@ -18,8 +18,29 @@ model User {
 
   refreshTokens  RefreshToken[]
   passkeys       Passkey[]
+  trips          Trip[]
 
   @@index([email])
+}
+
+model Trip {
+  id           String   @id @default(uuid())
+  destination  String
+  startDate    DateTime @map("start_date")
+  endDate      DateTime @map("end_date")
+  travelers    Int      @default(1)
+  budget       String   @default("moderate") // budget | moderate | luxury
+  interests    String[] // e.g. ["culture", "food", "adventure"]
+  notes        String?
+  itinerary    Json     // The generated day-by-day plan
+  status       String   @default("draft") // draft | planned | completed
+  
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
 }
 
 model Passkey {

@@ -4,12 +4,13 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, User, Settings, LogOut, Menu, X, Map } from 'lucide-react';
+import { LayoutDashboard, User, Settings, LogOut, Menu, X, Map, MapPin } from 'lucide-react';
 import { AnimatedBackground } from '@/components/ui/animated-background';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard/trips', label: 'My Trips', icon: MapPin },
   { href: '/dashboard/profile', label: 'Profile', icon: User },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
